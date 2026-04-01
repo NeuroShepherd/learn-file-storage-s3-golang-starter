@@ -1,10 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -34,7 +36,11 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	// TODO: implement the upload here
 	const maxMemory = 10 * 1024 * 1024 // 10 MB
-	r.ParseMultipartForm(maxMemory)
+	err = r.ParseMultipartForm(maxMemory)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't parse multipart form", err)
+		return
+	}
 
 	imageData, imageHeader, err := r.FormFile("thumbnail")
 	if err != nil {
@@ -44,16 +50,14 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	defer imageData.Close()
 
 	mediaType := imageHeader.Header.Get("Content-Type")
-
-	imageBytes, err := io.ReadAll(imageData)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't read thumbnail file", err)
+	parts := strings.Split(mediaType, "/")
+	if len(parts) != 2 {
+		respondWithError(w, http.StatusBadRequest, "Invalid media type for thumbnail", nil)
 		return
 	}
-
-	imageBytesBase64 := base64.StdEncoding.EncodeToString(imageBytes)
-
-	dataUrl := fmt.Sprintf("data:%s;base64,%s", mediaType, imageBytesBase64)
+	fileExtension := parts[1]
+	fileName := videoID.String() + "." + fileExtension
+	outputPath := filepath.Join(cfg.assetsRoot, fileName)
 
 	// get video's metadata from the database
 	video, err := cfg.db.GetVideo(videoID)
@@ -68,6 +72,20 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	dst, err := os.Create(outputPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create thumbnail file", err)
+		return
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, imageData)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't copy thumbnail file", err)
+		return
+	}
+
+	dataUrl := "http://localhost:" + cfg.port + "/assets/" + fileName
 	video.ThumbnailURL = &dataUrl
 
 	err = cfg.db.UpdateVideo(video)
