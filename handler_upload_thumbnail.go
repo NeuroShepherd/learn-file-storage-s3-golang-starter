@@ -69,7 +69,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	videoThumbnails[videoID] = thumb
 
-	thumbnailUrl := fmt.Sprintf("http://localhost:%d/api/thumbnails/%s", cfg.port, videoID)
+	thumbnailUrl := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
 	video.ThumbnailURL = &thumbnailUrl
 
 	err = cfg.db.UpdateVideo(video)
