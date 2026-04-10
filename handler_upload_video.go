@@ -107,6 +107,21 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		videoAspectMode = "other"
 	}
 
+	tempFilePath, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't process video for fast start", err)
+		return
+	}
+	defer os.Remove(tempFilePath)
+
+	// open the processed video filefor reading
+	tempFile, err = os.Open(tempFilePath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't open processed video file", err)
+		return
+	}
+	defer tempFile.Close()
+
 	// reset the file pointer to the beginning of the file
 	tempFile.Seek(0, io.SeekStart)
 
@@ -135,7 +150,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Video uploaded successfully", "videoURL": videoURL})
+	respondWithJSON(w, http.StatusOK, video)
 
 }
 
