@@ -89,6 +89,24 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// get aspect ratio
+	aspectRatio, err := getVideoAspectRatio(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get video aspect ratio", err)
+		return
+	}
+
+	// determine video aspect mode based on aspect ratio
+	videoAspectMode := ""
+	switch aspectRatio {
+	case "16:9":
+		videoAspectMode = "landscape"
+	case "9:16":
+		videoAspectMode = "portrait"
+	default:
+		videoAspectMode = "other"
+	}
+
 	// reset the file pointer to the beginning of the file
 	tempFile.Seek(0, io.SeekStart)
 
@@ -97,7 +115,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      aws.String(cfg.s3Bucket),
-		Key:         aws.String(fileName),
+		Key:         aws.String(videoAspectMode + "/" + fileName),
 		Body:        tempFile,
 		ContentType: aws.String(mediaType),
 	},
@@ -107,7 +125,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	videoURL := "https://" + cfg.s3Bucket + ".s3." + cfg.s3Region + ".amazonaws.com/" + fileName
+	videoURL := "https://" + cfg.s3Bucket + ".s3." + cfg.s3Region + ".amazonaws.com/" + videoAspectMode + "/" + fileName
 	video.VideoURL = &videoURL
 	video.UpdatedAt = time.Now()
 
